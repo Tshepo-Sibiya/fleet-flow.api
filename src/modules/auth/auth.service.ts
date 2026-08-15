@@ -43,7 +43,7 @@ export class AuthService {
       isInvitePending: false,
     });
 
-    const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
+    const appUrl = this.configService.get<string>('APP_URL') || 'https://fleet-flowapi-production.up.railway.app';
     const confirmUrl = `${appUrl}/api/auth/confirm-email?token=${confirmationToken}`;
 
     // Send confirmation email via Resend
@@ -80,7 +80,7 @@ export class AuthService {
     }
 
     if (!user.password) {
-      throw new UnauthorizedException('Driver credentials not set up yet. Check your invitation email.');
+      throw new UnauthorizedException('Driver password not set up yet. Enter your invitation code to set up your password.');
     }
 
     const isMatch = await bcrypt.compare(dto.password, user.password);
@@ -139,27 +139,26 @@ export class AuthService {
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
-    const confirmationToken = crypto.randomBytes(32).toString('hex');
 
+    // Set password, activate driver account immediately (isConfirmed = true), clear invite token
     user.password = hashedPassword;
     user.isInvitePending = false;
     user.inviteToken = null;
-    user.confirmationToken = confirmationToken;
-    user.isConfirmed = false;
+    user.confirmationToken = null;
+    user.isConfirmed = true;
 
     await user.save();
 
-    const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
-    const confirmUrl = `${appUrl}/api/auth/confirm-email?token=${confirmationToken}`;
-
-    // Send driver confirmation email via Resend
-    await this.emailService.sendDriverConfirmationEmail(user.email, user.fullName, confirmationToken);
+    const token = this.generateToken(user);
+    const userObj = user.toObject();
+    delete userObj.password;
+    delete userObj.confirmationToken;
+    delete userObj.inviteToken;
 
     return {
-      message: 'Driver credentials saved successfully! A profile confirmation email has been sent to your email address.',
-      email: user.email,
-      confirmationToken,
-      confirmUrl,
+      message: 'Driver password saved successfully! Your driver account is now active.',
+      user: userObj,
+      token,
     };
   }
 

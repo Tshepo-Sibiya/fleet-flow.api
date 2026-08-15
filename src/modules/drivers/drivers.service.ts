@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { User, UserDocument, UserRole } from '../../schemas/user.schema';
 import { Vehicle, VehicleDocument } from '../../schemas/vehicle.schema';
@@ -19,6 +20,7 @@ export class DriversService {
     @InjectModel(AdvanceRequest.name) private advanceModel: Model<AdvanceRequestDocument>,
     @InjectModel(CheckInRate.name) private checkInRateModel: Model<CheckInRateDocument>,
     private emailService: EmailService,
+    private configService: ConfigService,
   ) {}
 
   async inviteDriver(ownerId: string, dto: InviteDriverDto) {
@@ -41,6 +43,7 @@ export class DriversService {
 
     const inviteToken = crypto.randomBytes(32).toString('hex');
 
+    // Create driver with isConfirmed: true (No separate email verification step required!)
     const driver = await this.userModel.create({
       email: dto.email.toLowerCase(),
       fullName: dto.fullName,
@@ -48,7 +51,7 @@ export class DriversService {
       role: UserRole.DRIVER,
       ownerId,
       companyName: owner.companyName || '',
-      isConfirmed: false,
+      isConfirmed: true,
       isInvitePending: true,
       inviteToken,
     });
@@ -72,6 +75,9 @@ export class DriversService {
       effectiveWeekStart: mondayStr,
     });
 
+    const appUrl = this.configService.get<string>('APP_URL') || 'https://fleet-flowapi-production.up.railway.app';
+    const inviteUrl = `${appUrl}/api/auth/driver-invite-landing?token=${inviteToken}`;
+
     // Send Driver Invitation Email via Resend
     await this.emailService.sendDriverInviteEmail(
       driver.email,
@@ -81,9 +87,10 @@ export class DriversService {
     );
 
     return {
-      message: `Invitation email sent via Resend to ${driver.email}. The driver can set up credentials via the email link.`,
+      message: `Driver added! An invitation token and email link have been generated for ${driver.email}.`,
       driverId: driver._id,
       inviteToken,
+      inviteUrl,
     };
   }
 
