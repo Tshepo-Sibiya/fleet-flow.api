@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class InviteDriverDto {
   @ApiProperty({ example: 'Thabo Mokoena', description: 'Full Name of the Uber Driver' })
@@ -21,4 +21,9 @@ export class InviteDriverDto {
   @IsString()
   @IsOptional()
   vehicleId?: string;
+
+  @ApiPropertyOptional({ example: 2200, description: 'Weekly check-in rate for driver in ZAR' })
+  @IsNumber()
+  @IsOptional()
+  weeklyCheckInAmount?: number;
 }

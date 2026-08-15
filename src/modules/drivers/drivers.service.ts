@@ -67,13 +67,13 @@ export class DriversService {
       }
     }
 
-    // Default initial check-in rate (R2200) for driver
+    // Initial check-in rate (custom or default R2200) for driver
     const today = new Date();
     const mondayStr = this.getMondayString(today);
     await this.checkInRateModel.create({
       driverId: driver._id,
       ownerId,
-      weeklyAmount: 2200,
+      weeklyAmount: dto.weeklyCheckInAmount && dto.weeklyCheckInAmount > 0 ? dto.weeklyCheckInAmount : 2200,
       effectiveWeekStart: mondayStr,
     });
 
