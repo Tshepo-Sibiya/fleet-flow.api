@@ -7,10 +7,10 @@ export class InviteDriverDto {
   @IsNotEmpty()
   fullName: string;
 
-  @ApiProperty({ example: 'driver.thabo@fleetflow.co.za', description: 'Email address of the Uber Driver' })
+  @ApiPropertyOptional({ example: 'driver.thabo@fleetflow.co.za', description: 'Optional initial email address of the Uber Driver' })
   @IsEmail()
-  @IsNotEmpty()
-  email: string;
+  @IsOptional()
+  email?: string;
 
   @ApiPropertyOptional({ example: '+27 73 987 6543', description: 'Phone number' })
   @IsString()
