@@ -7,6 +7,7 @@ export class EmailService {
   private resend?: Resend;
   private readonly logger = new Logger(EmailService.name);
   private senderEmail: string;
+  private primaryTestEmail: string;
 
   constructor(private configService: ConfigService) {
     const apiKey = this.configService.get<string>('RESEND_API_KEY');
@@ -14,21 +15,24 @@ export class EmailService {
       this.resend = new Resend(apiKey);
       this.logger.log('Resend EmailGateway initialized successfully.');
     } else {
-      this.logger.warn('RESEND_API_KEY missing. Resend email gateway disabled.');
+      this.logger.warn('RESEND_API_KEY missing. Resend email gateway running in mock mode.');
     }
     this.senderEmail = this.configService.get<string>('RESEND_SENDER_EMAIL') || 'FleetFlow <onboarding@resend.dev>';
+    this.primaryTestEmail = this.configService.get<string>('RESEND_TEST_RECIPIENT') || 'tshepo.sibiya@gmail.com';
   }
 
   async sendOwnerConfirmationEmail(email: string, fullName: string, token: string) {
     const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
     const confirmUrl = `${appUrl}/api/auth/confirm-email?token=${token}`;
 
+    this.logger.log(`[Owner Confirmation Link] Email: ${email} -> Link: ${confirmUrl}`);
+
     const subject = 'Confirm your FleetFlow Owner Account';
     const html = `
       <div style="font-family: Arial, sans-serif; background-color: #0A192F; color: #FFFFFF; padding: 30px; border-radius: 12px;">
         <h2 style="color: #D4AF37; margin-bottom: 8px;">Welcome to FleetFlow, ${fullName}!</h2>
         <p style="font-size: 15px; color: #E2E8F0;">Thank you for registering your fleet organization on FleetFlow.</p>
-        <p style="font-size: 15px; color: #E2E8F0;">Please click the button below to confirm your email address and activate your account:</p>
+        <p style="font-size: 15px; color: #E2E8F0;">Please click the button below to confirm your email address (${email}) and activate your account:</p>
         <div style="margin: 25px 0;">
           <a href="${confirmUrl}" style="background-color: #1E3A8A; color: #FFFFFF; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 8px; border: 1px solid #D4AF37; display: inline-block;">
             Confirm Owner Account
@@ -44,6 +48,8 @@ export class EmailService {
   async sendDriverInviteEmail(email: string, fullName: string, ownerName: string, inviteToken: string) {
     const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
     const inviteUrl = `${appUrl}/api/auth/driver-invite-landing?token=${inviteToken}`;
+
+    this.logger.log(`[Driver Invite Link] Email: ${email} -> Link: ${inviteUrl}`);
 
     const subject = `Invitation to join ${ownerName}'s Uber Fleet on FleetFlow`;
     const html = `
@@ -67,6 +73,8 @@ export class EmailService {
   async sendDriverConfirmationEmail(email: string, fullName: string, token: string) {
     const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
     const confirmUrl = `${appUrl}/api/auth/confirm-email?token=${token}`;
+
+    this.logger.log(`[Driver Confirmation Link] Email: ${email} -> Link: ${confirmUrl}`);
 
     const subject = 'Confirm your FleetFlow Driver Profile';
     const html = `
@@ -99,6 +107,22 @@ export class EmailService {
         subject,
         html,
       });
+
+      if (response.error) {
+        this.logger.warn(`Resend failed to send to ${to}: ${response.error.message}`);
+        // If Resend test domain restricts external recipient, fallback to account owner email
+        if (to !== this.primaryTestEmail) {
+          this.logger.log(`Forwarding email to verified Resend test inbox (${this.primaryTestEmail})...`);
+          const fallbackRes = await this.resend.emails.send({
+            from: this.senderEmail,
+            to: [this.primaryTestEmail],
+            subject: `[For: ${to}] ${subject}`,
+            html: `<div style="padding: 10px; background: #1E3A8A; color: white; margin-bottom: 15px; border-radius: 6px;">Note: This test email was intended for <strong>${to}</strong></div>${html}`,
+          });
+          return fallbackRes;
+        }
+      }
+
       this.logger.log(`Email sent via Resend to ${to}: ${JSON.stringify(response)}`);
       return response;
     } catch (error) {
