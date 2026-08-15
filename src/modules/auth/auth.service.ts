@@ -6,7 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User, UserDocument, UserRole } from '../../schemas/user.schema';
-import { RegisterOwnerDto, LoginDto, SetupDriverCredentialsDto, ChangePasswordDto } from './dto/auth.dto';
+import { RegisterOwnerDto, LoginDto, SetupDriverCredentialsDto, RegisterDriverWithTokenDto, ChangePasswordDto } from './dto/auth.dto';
 import { EmailService } from '../email/email.service';
 
 @Injectable()
@@ -107,9 +107,14 @@ export class AuthService {
   }
 
   async getDriverInvite(token: string) {
-    const user = await this.userModel.findOne({ inviteToken: token, role: UserRole.DRIVER });
+    const cleanToken = token.trim();
+    const user = await this.userModel.findOne({
+      inviteToken: { $regex: new RegExp(`^${cleanToken}$`, 'i') },
+      role: UserRole.DRIVER,
+    });
+
     if (!user) {
-      throw new NotFoundException('Invalid or expired driver invitation token');
+      throw new NotFoundException('Invalid or expired driver invitation token code.');
     }
 
     let ownerCompanyName = 'Fleet Owner';
@@ -121,10 +126,60 @@ export class AuthService {
     }
 
     return {
-      email: user.email,
+      email: user.email.includes('@fleetflow.temp') ? '' : user.email,
       fullName: user.fullName,
       ownerCompanyName,
-      inviteToken: token,
+      inviteToken: user.inviteToken,
+    };
+  }
+
+  async registerDriverWithToken(dto: RegisterDriverWithTokenDto) {
+    if (dto.password !== dto.confirmPassword) {
+      throw new BadRequestException('Password and Confirm Password do not match');
+    }
+
+    const cleanToken = dto.inviteToken.trim();
+    const user = await this.userModel.findOne({
+      inviteToken: { $regex: new RegExp(`^${cleanToken}$`, 'i') },
+      role: UserRole.DRIVER,
+    });
+
+    if (!user) {
+      throw new BadRequestException('Invalid or expired invitation token code. Please ask your Fleet Owner for a valid token.');
+    }
+
+    const existingEmail = await this.userModel.findOne({
+      email: dto.email.toLowerCase(),
+      _id: { $ne: user._id },
+    });
+    if (existingEmail) {
+      throw new BadRequestException('This email address is already registered to another account.');
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    user.email = dto.email.toLowerCase();
+    user.fullName = dto.fullName;
+    user.password = hashedPassword;
+    if (dto.phoneNumber) {
+      user.phoneNumber = dto.phoneNumber;
+    }
+    user.isConfirmed = true;
+    user.isInvitePending = false;
+    user.inviteToken = null;
+
+    await user.save();
+
+    const authToken = this.generateToken(user);
+    const userObj = user.toObject();
+    delete userObj.password;
+    delete userObj.confirmationToken;
+    delete userObj.inviteToken;
+
+    return {
+      message: 'Driver registration complete! Welcome to FleetFlow.',
+      user: userObj,
+      token: authToken,
     };
   }
 
@@ -133,14 +188,18 @@ export class AuthService {
       throw new BadRequestException('Password and Confirm Password do not match');
     }
 
-    const user = await this.userModel.findOne({ inviteToken: dto.inviteToken, role: UserRole.DRIVER });
+    const cleanToken = dto.inviteToken.trim();
+    const user = await this.userModel.findOne({
+      inviteToken: { $regex: new RegExp(`^${cleanToken}$`, 'i') },
+      role: UserRole.DRIVER,
+    });
+
     if (!user) {
       throw new BadRequestException('Invalid or expired driver invitation token');
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    // Set password, activate driver account immediately (isConfirmed = true), clear invite token
     user.password = hashedPassword;
     user.isInvitePending = false;
     user.inviteToken = null;

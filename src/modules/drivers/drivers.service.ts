@@ -1,14 +1,12 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { User, UserDocument, UserRole } from '../../schemas/user.schema';
 import { Vehicle, VehicleDocument } from '../../schemas/vehicle.schema';
 import { WeeklySettlement, WeeklySettlementDocument } from '../../schemas/weekly-settlement.schema';
 import { AdvanceRequest, AdvanceRequestDocument, AdvanceStatus } from '../../schemas/advance-request.schema';
 import { CheckInRate, CheckInRateDocument } from '../../schemas/check-in-rate.schema';
-import { EmailService } from '../email/email.service';
 import { InviteDriverDto } from './dto/driver.dto';
 
 @Injectable()
@@ -19,8 +17,6 @@ export class DriversService {
     @InjectModel(WeeklySettlement.name) private settlementModel: Model<WeeklySettlementDocument>,
     @InjectModel(AdvanceRequest.name) private advanceModel: Model<AdvanceRequestDocument>,
     @InjectModel(CheckInRate.name) private checkInRateModel: Model<CheckInRateDocument>,
-    private emailService: EmailService,
-    private configService: ConfigService,
   ) {}
 
   async inviteDriver(ownerId: string, dto: InviteDriverDto) {
@@ -29,23 +25,29 @@ export class DriversService {
       throw new NotFoundException('Owner not found');
     }
 
-    if (dto.email.toLowerCase() === owner.email.toLowerCase()) {
+    if (dto.email && dto.email.toLowerCase() === owner.email.toLowerCase()) {
       throw new BadRequestException('As a Fleet Owner, you cannot add yourself as a driver.');
     }
 
-    const existing = await this.userModel.findOne({ email: dto.email.toLowerCase() });
-    if (existing) {
-      if (existing.role === UserRole.OWNER) {
-        throw new BadRequestException('This email is registered to a Fleet Owner and cannot be invited as a Driver.');
+    if (dto.email) {
+      const existing = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+      if (existing) {
+        if (existing.role === UserRole.OWNER) {
+          throw new BadRequestException('This email is registered to a Fleet Owner and cannot be invited as a Driver.');
+        }
+        throw new BadRequestException('A driver with this email address is already registered.');
       }
-      throw new BadRequestException('A driver with this email address is already registered.');
     }
 
-    const inviteToken = crypto.randomBytes(32).toString('hex');
+    // Generate clean 8-character uppercase invitation token (e.g. DRV-8F92A34B)
+    const tokenBytes = crypto.randomBytes(4).toString('hex').toUpperCase();
+    const inviteToken = `DRV-${tokenBytes}`;
 
-    // Create driver with isConfirmed: true (No separate email verification step required!)
+    const driverEmail = (dto.email || `driver.${tokenBytes.toLowerCase()}@fleetflow.temp`).toLowerCase();
+
+    // Create driver record linked to owner (NO EMAIL IS SENT)
     const driver = await this.userModel.create({
-      email: dto.email.toLowerCase(),
+      email: driverEmail,
       fullName: dto.fullName,
       phoneNumber: dto.phoneNumber || '',
       role: UserRole.DRIVER,
@@ -75,22 +77,11 @@ export class DriversService {
       effectiveWeekStart: mondayStr,
     });
 
-    const appUrl = this.configService.get<string>('APP_URL') || 'https://fleet-flowapi-production.up.railway.app';
-    const inviteUrl = `${appUrl}/api/auth/driver-invite-landing?token=${inviteToken}`;
-
-    // Send Driver Invitation Email via Resend
-    await this.emailService.sendDriverInviteEmail(
-      driver.email,
-      driver.fullName,
-      owner.companyName || owner.fullName,
-      inviteToken,
-    );
-
     return {
-      message: `Driver added! An invitation token and email link have been generated for ${driver.email}.`,
+      message: `Driver token generated! Share code ${inviteToken} with your driver.`,
       driverId: driver._id,
       inviteToken,
-      inviteUrl,
+      ownerCompanyName: owner.companyName || owner.fullName,
     };
   }
 

@@ -2,7 +2,7 @@ import { Controller, Post, Body, Get, Query, Param, UseGuards, Request, Res } fr
 import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { RegisterOwnerDto, LoginDto, SetupDriverCredentialsDto, ChangePasswordDto, ConfirmEmailDto } from './dto/auth.dto';
+import { RegisterOwnerDto, LoginDto, SetupDriverCredentialsDto, RegisterDriverWithTokenDto, ChangePasswordDto, ConfirmEmailDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 @ApiTags('Auth')
@@ -19,7 +19,7 @@ export class AuthController {
   }
 
   @Get('confirm-email')
-  @ApiOperation({ summary: 'Confirm Email Address (Browser Email Link)', description: 'Triggered when owner or driver clicks the confirmation link in their Resend email. Updates status to isConfirmed: true in MongoDB database.' })
+  @ApiOperation({ summary: 'Confirm Email Address (Browser Email Link)', description: 'Triggered when owner clicks confirmation link.' })
   @ApiQuery({ name: 'token', description: 'Email confirmation token' })
   async confirmEmailLink(@Query('token') token: string, @Res() res: Response) {
     try {
@@ -84,22 +84,27 @@ export class AuthController {
   }
 
   @Post('login')
-  @ApiOperation({ summary: 'User Login', description: 'Authenticates Owner or Driver and returns JWT token. Unconfirmed emails are blocked.' })
+  @ApiOperation({ summary: 'User Login', description: 'Authenticates Owner or Driver and returns JWT token.' })
   @ApiResponse({ status: 200, description: 'JWT authentication token & user payload' })
-  @ApiResponse({ status: 400, description: 'Unconfirmed email' })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
 
   @Get('driver-invite/:token')
-  @ApiOperation({ summary: 'Get Driver Invitation Details', description: 'Returns driver prefilled email & fleet company info for invitation token.' })
+  @ApiOperation({ summary: 'Get Driver Invitation Details', description: 'Returns driver invitation details for token code.' })
   async getDriverInvite(@Param('token') token: string) {
     return this.authService.getDriverInvite(token);
   }
 
+  @Post('register-driver-with-token')
+  @ApiOperation({ summary: 'Register Driver with Invitation Token Code', description: 'Allows driver to enter token, email, username and password to complete registration.' })
+  async registerDriverWithToken(@Body() dto: RegisterDriverWithTokenDto) {
+    return this.authService.registerDriverWithToken(dto);
+  }
+
   @Post('setup-driver-credentials')
-  @ApiOperation({ summary: 'Setup Driver Password via Invite Token', description: 'Allows invited drivers to set password and requests profile confirmation via Resend.' })
+  @ApiOperation({ summary: 'Setup Driver Password via Invite Token', description: 'Allows invited drivers to set password using token.' })
   async setupDriverCredentials(@Body() dto: SetupDriverCredentialsDto) {
     return this.authService.setupDriverCredentials(dto);
   }
