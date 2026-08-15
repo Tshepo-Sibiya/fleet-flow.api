@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, UnauthorizedException, NotFoundExcepti
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User, UserDocument, UserRole } from '../../schemas/user.schema';
@@ -14,6 +15,7 @@ export class AuthService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private jwtService: JwtService,
     private emailService: EmailService,
+    private configService: ConfigService,
   ) {}
 
   async registerOwner(dto: RegisterOwnerDto) {
@@ -41,12 +43,17 @@ export class AuthService {
       isInvitePending: false,
     });
 
+    const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
+    const confirmUrl = `${appUrl}/api/auth/confirm-email?token=${confirmationToken}`;
+
     // Send confirmation email via Resend
     await this.emailService.sendOwnerConfirmationEmail(user.email, user.fullName, confirmationToken);
 
     return {
-      message: 'Registration successful! A confirmation email has been sent to your inbox. Please click the link in the email to activate your account before logging in.',
+      message: 'Registration successful! A confirmation link has been sent to your inbox. You can also activate your account instantly below.',
       email: user.email,
+      confirmationToken,
+      confirmUrl,
     };
   }
 
@@ -142,12 +149,17 @@ export class AuthService {
 
     await user.save();
 
+    const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
+    const confirmUrl = `${appUrl}/api/auth/confirm-email?token=${confirmationToken}`;
+
     // Send driver confirmation email via Resend
     await this.emailService.sendDriverConfirmationEmail(user.email, user.fullName, confirmationToken);
 
     return {
-      message: 'Driver credentials saved successfully! A profile confirmation email has been sent to your email address. Please confirm your profile to log in.',
+      message: 'Driver credentials saved successfully! A profile confirmation email has been sent to your email address.',
       email: user.email,
+      confirmationToken,
+      confirmUrl,
     };
   }
 
