@@ -18,7 +18,7 @@ export class EmailService {
       this.logger.warn('RESEND_API_KEY missing. Resend email gateway running in mock mode.');
     }
     this.senderEmail = this.configService.get<string>('RESEND_SENDER_EMAIL') || 'FleetFlow <onboarding@resend.dev>';
-    this.primaryTestEmail = this.configService.get<string>('RESEND_TEST_RECIPIENT') || 'tshepo.sibiya@gmail.com';
+    this.primaryTestEmail = this.configService.get<string>('RESEND_TEST_RECIPIENT') || 'criteriontech.studio@gmail.com';
   }
 
   async sendOwnerConfirmationEmail(email: string, fullName: string, token: string) {
@@ -110,7 +110,6 @@ export class EmailService {
 
       if (response.error) {
         this.logger.warn(`Resend failed to send to ${to}: ${response.error.message}`);
-        // If Resend test domain restricts external recipient, fallback to account owner email
         if (to !== this.primaryTestEmail) {
           this.logger.log(`Forwarding email to verified Resend test inbox (${this.primaryTestEmail})...`);
           const fallbackRes = await this.resend.emails.send({
