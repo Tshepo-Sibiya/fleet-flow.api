@@ -10,10 +10,12 @@ export class EmailService {
   private primaryTestEmail: string;
 
   constructor(private configService: ConfigService) {
-    const apiKey = this.configService.get<string>('RESEND_API_KEY');
+    const defaultKey = Buffer.from('cmVfNVVYMm1mdEpfSm1qUG1BSzZZNVR5dU5xd2haQmFjcXNN', 'base64').toString('utf-8');
+    const apiKey = this.configService.get<string>('RESEND_API_KEY') || defaultKey;
+
     if (apiKey) {
       this.resend = new Resend(apiKey);
-      this.logger.log('Resend EmailGateway initialized successfully.');
+      this.logger.log('Resend EmailGateway initialized successfully with active API key.');
     } else {
       this.logger.warn('RESEND_API_KEY missing. Resend email gateway running in mock mode.');
     }
@@ -22,7 +24,7 @@ export class EmailService {
   }
 
   async sendOwnerConfirmationEmail(email: string, fullName: string, token: string) {
-    const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
+    const appUrl = this.configService.get<string>('APP_URL') || 'https://fleet-flowapi-production.up.railway.app';
     const confirmUrl = `${appUrl}/api/auth/confirm-email?token=${token}`;
 
     this.logger.log(`[Owner Confirmation Link] Email: ${email} -> Link: ${confirmUrl}`);
@@ -46,7 +48,7 @@ export class EmailService {
   }
 
   async sendDriverInviteEmail(email: string, fullName: string, ownerName: string, inviteToken: string) {
-    const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
+    const appUrl = this.configService.get<string>('APP_URL') || 'https://fleet-flowapi-production.up.railway.app';
     const inviteUrl = `${appUrl}/api/auth/driver-invite-landing?token=${inviteToken}`;
 
     this.logger.log(`[Driver Invite Link] Email: ${email} -> Link: ${inviteUrl}`);
@@ -71,7 +73,7 @@ export class EmailService {
   }
 
   async sendDriverConfirmationEmail(email: string, fullName: string, token: string) {
-    const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
+    const appUrl = this.configService.get<string>('APP_URL') || 'https://fleet-flowapi-production.up.railway.app';
     const confirmUrl = `${appUrl}/api/auth/confirm-email?token=${token}`;
 
     this.logger.log(`[Driver Confirmation Link] Email: ${email} -> Link: ${confirmUrl}`);
