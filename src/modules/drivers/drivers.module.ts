@@ -5,11 +5,13 @@ import { Vehicle, VehicleSchema } from '../../schemas/vehicle.schema';
 import { WeeklySettlement, WeeklySettlementSchema } from '../../schemas/weekly-settlement.schema';
 import { AdvanceRequest, AdvanceRequestSchema } from '../../schemas/advance-request.schema';
 import { CheckInRate, CheckInRateSchema } from '../../schemas/check-in-rate.schema';
+import { EmailModule } from '../email/email.module';
 import { DriversService } from './drivers.service';
 import { DriversController } from './drivers.controller';
 
 @Module({
   imports: [
+    EmailModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Vehicle.name, schema: VehicleSchema },

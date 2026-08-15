@@ -1,12 +1,14 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import * as crypto from 'crypto';
 import { User, UserDocument, UserRole } from '../../schemas/user.schema';
 import { Vehicle, VehicleDocument } from '../../schemas/vehicle.schema';
 import { WeeklySettlement, WeeklySettlementDocument } from '../../schemas/weekly-settlement.schema';
 import { AdvanceRequest, AdvanceRequestDocument, AdvanceStatus } from '../../schemas/advance-request.schema';
 import { CheckInRate, CheckInRateDocument } from '../../schemas/check-in-rate.schema';
-import * as bcrypt from 'bcrypt';
+import { EmailService } from '../email/email.service';
+import { InviteDriverDto } from './dto/driver.dto';
 
 @Injectable()
 export class DriversService {
@@ -16,25 +18,49 @@ export class DriversService {
     @InjectModel(WeeklySettlement.name) private settlementModel: Model<WeeklySettlementDocument>,
     @InjectModel(AdvanceRequest.name) private advanceModel: Model<AdvanceRequestDocument>,
     @InjectModel(CheckInRate.name) private checkInRateModel: Model<CheckInRateDocument>,
+    private emailService: EmailService,
   ) {}
 
-  async createDriver(ownerId: string, data: { fullName: string; email: string; phoneNumber?: string; password?: string }) {
-    const existing = await this.userModel.findOne({ email: data.email.toLowerCase() });
-    if (existing) {
-      throw new BadRequestException('Email already registered');
+  async inviteDriver(ownerId: string, dto: InviteDriverDto) {
+    const owner = await this.userModel.findById(ownerId);
+    if (!owner) {
+      throw new NotFoundException('Owner not found');
     }
 
-    const defaultPassword = data.password || 'Driver123!';
-    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+    if (dto.email.toLowerCase() === owner.email.toLowerCase()) {
+      throw new BadRequestException('As a Fleet Owner, you cannot add yourself as a driver.');
+    }
+
+    const existing = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    if (existing) {
+      if (existing.role === UserRole.OWNER) {
+        throw new BadRequestException('This email is registered to a Fleet Owner and cannot be invited as a Driver.');
+      }
+      throw new BadRequestException('A driver with this email address is already registered.');
+    }
+
+    const inviteToken = crypto.randomBytes(32).toString('hex');
 
     const driver = await this.userModel.create({
-      email: data.email.toLowerCase(),
-      password: hashedPassword,
-      fullName: data.fullName,
-      phoneNumber: data.phoneNumber || '',
+      email: dto.email.toLowerCase(),
+      fullName: dto.fullName,
+      phoneNumber: dto.phoneNumber || '',
       role: UserRole.DRIVER,
       ownerId,
+      companyName: owner.companyName || '',
+      isConfirmed: false,
+      isInvitePending: true,
+      inviteToken,
     });
+
+    // Link vehicle if selected
+    if (dto.vehicleId) {
+      const vehicle = await this.vehicleModel.findOne({ _id: dto.vehicleId, ownerId });
+      if (vehicle) {
+        vehicle.assignedDriverId = driver._id.toString();
+        await vehicle.save();
+      }
+    }
 
     // Default initial check-in rate (R2200) for driver
     const today = new Date();
@@ -46,9 +72,19 @@ export class DriversService {
       effectiveWeekStart: mondayStr,
     });
 
-    const driverObj = driver.toObject();
-    delete driverObj.password;
-    return driverObj;
+    // Send Driver Invitation Email via Resend
+    await this.emailService.sendDriverInviteEmail(
+      driver.email,
+      driver.fullName,
+      owner.companyName || owner.fullName,
+      inviteToken,
+    );
+
+    return {
+      message: `Invitation email sent via Resend to ${driver.email}. The driver can set up credentials via the email link.`,
+      driverId: driver._id,
+      inviteToken,
+    };
   }
 
   async findAllForOwner(ownerId: string) {
@@ -88,7 +124,6 @@ export class DriversService {
   }
 
   async getDriverCurrentDebt(driverId: string): Promise<number> {
-    // 1. Get latest settled week closing debt balance
     const latestSettlement = await this.settlementModel
       .findOne({ driverId })
       .sort({ weekStartDate: -1 })
@@ -102,7 +137,6 @@ export class DriversService {
       baseDate = new Date((latestSettlement as any).createdAt);
     }
 
-    // 2. Add any approved advances created AFTER the last settlement
     const query: any = {
       driverId,
       status: AdvanceStatus.APPROVED,
@@ -121,19 +155,18 @@ export class DriversService {
     const today = new Date();
     const mondayStr = this.getMondayString(today);
 
-    // Find rate for current week or latest available rate
     const rateDoc = await this.checkInRateModel
       .findOne({ driverId, effectiveWeekStart: { $lte: mondayStr } })
       .sort({ effectiveWeekStart: -1 })
       .exec();
 
-    return rateDoc ? rateDoc.weeklyAmount : 2200; // default R2200
+    return rateDoc ? rateDoc.weeklyAmount : 2200;
   }
 
   private getMondayString(d: Date): string {
     const date = new Date(d);
     const day = date.getDay();
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
     const monday = new Date(date.setDate(diff));
     return monday.toISOString().split('T')[0];
   }

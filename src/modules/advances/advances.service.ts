@@ -1,7 +1,7 @@
-import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { AdvanceRequest, AdvanceRequestDocument, AdvanceStatus } from '../../schemas/advance-request.schema';
+import { AdvanceRequest, AdvanceRequestDocument, AdvanceStatus, AdvanceType } from '../../schemas/advance-request.schema';
 import { User, UserDocument, UserRole } from '../../schemas/user.schema';
 import { CreateAdvanceRequestDto, UpdateAdvanceStatusDto } from './dto/advance.dto';
 
@@ -27,13 +27,14 @@ export class AdvancesService {
       ownerId: driver.ownerId,
       amount: dto.amount,
       reason: dto.reason,
+      type: dto.type || AdvanceType.REGULAR_ADVANCE,
       status: AdvanceStatus.PENDING,
     });
 
     return this.advanceModel
       .findById(advance._id)
       .populate('driverId', 'fullName email phoneNumber')
-      .populate('ownerId', 'fullName email')
+      .populate('ownerId', 'fullName email companyName')
       .exec();
   }
 
@@ -41,7 +42,7 @@ export class AdvancesService {
     if (user.role === UserRole.DRIVER) {
       return this.advanceModel
         .find({ driverId: user._id })
-        .populate('ownerId', 'fullName email')
+        .populate('ownerId', 'fullName email companyName')
         .sort({ createdAt: -1 })
         .exec();
     }
@@ -73,7 +74,7 @@ export class AdvancesService {
     return this.advanceModel
       .findById(advance._id)
       .populate('driverId', 'fullName email phoneNumber')
-      .populate('ownerId', 'fullName email')
+      .populate('ownerId', 'fullName email companyName')
       .exec();
   }
 }

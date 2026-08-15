@@ -8,9 +8,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {
-        const uri =
-          configService.get<string>('MONGODB_URI') ||
-          'mongodb+srv://tsheposibiya_db_user:R6xsjnXmHJzd8xBe@cluster0.ci6f0vm.mongodb.net/fleetflow_db?appName=Cluster0';
+        const uri = configService.get<string>('MONGODB_URI') || 'mongodb://127.0.0.1:27017/fleetflow_db';
         return {
           uri,
         };

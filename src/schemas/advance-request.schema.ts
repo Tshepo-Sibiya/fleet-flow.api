@@ -9,6 +9,11 @@ export enum AdvanceStatus {
   REJECTED = 'REJECTED',
 }
 
+export enum AdvanceType {
+  REGULAR_ADVANCE = 'REGULAR_ADVANCE',
+  EARLY_CASHOUT = 'EARLY_CASHOUT',
+}
+
 @Schema({ timestamps: true })
 export class AdvanceRequest {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
@@ -22,6 +27,9 @@ export class AdvanceRequest {
 
   @Prop({ required: true, trim: true })
   reason: string;
+
+  @Prop({ required: true, enum: AdvanceType, default: AdvanceType.REGULAR_ADVANCE })
+  type: AdvanceType;
 
   @Prop({ required: true, enum: AdvanceStatus, default: AdvanceStatus.PENDING })
   status: AdvanceStatus;

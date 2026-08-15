@@ -29,11 +29,17 @@ export class SeedService {
       owner = await this.userModel.create({
         email: ownerEmail,
         password: hashedPassword,
-        fullName: 'Sipho Nkosi (Fleet Owner)',
+        fullName: 'Sipho Nkosi',
+        companyName: 'Nkosi Fleet Solutions',
         phoneNumber: '+27 82 123 4567',
         role: UserRole.OWNER,
+        isConfirmed: true,
+        isInvitePending: false,
       });
       console.log('Created Fleet Owner: owner@fleetflow.co.za');
+    } else {
+      owner.isConfirmed = true;
+      await owner.save();
     }
 
     // 2. Create Drivers
@@ -45,11 +51,17 @@ export class SeedService {
         email: driver1Email,
         password: hashedPassword,
         fullName: 'Thabo Mokoena',
+        companyName: 'Nkosi Fleet Solutions',
         phoneNumber: '+27 73 987 6543',
         role: UserRole.DRIVER,
         ownerId: owner._id,
+        isConfirmed: true,
+        isInvitePending: false,
       });
       console.log('Created Driver 1: driver.thabo@fleetflow.co.za');
+    } else {
+      driver1.isConfirmed = true;
+      await driver1.save();
     }
 
     const driver2Email = 'driver.siphiwe@fleetflow.co.za';
@@ -60,11 +72,17 @@ export class SeedService {
         email: driver2Email,
         password: hashedPassword,
         fullName: 'Siphiwe Cele',
+        companyName: 'Nkosi Fleet Solutions',
         phoneNumber: '+27 84 555 1234',
         role: UserRole.DRIVER,
         ownerId: owner._id,
+        isConfirmed: true,
+        isInvitePending: false,
       });
       console.log('Created Driver 2: driver.siphiwe@fleetflow.co.za');
+    } else {
+      driver2.isConfirmed = true;
+      await driver2.save();
     }
 
     // 3. Create Vehicles
@@ -77,7 +95,7 @@ export class SeedService {
         registrationNumber: 'CA 489-102',
         color: 'White',
         currentMileage: 94500,
-        nextServiceMileage: 95000, // Service due within 500km!
+        nextServiceMileage: 95000,
         ownerId: owner._id,
         assignedDriverId: driver1._id,
       });
@@ -123,12 +141,6 @@ export class SeedService {
     });
 
     if (!existingSettlement) {
-      // Driver Thabo made R4000 gross previous week
-      // Fixed Check-in R2200
-      // Opening debt: R1200
-      // Agreed debt repayment: R600 (out of R1200)
-      // Net Payout: 4000 - 2200 - 600 = R1200
-      // Closing carried over debt balance: R600
       await this.settlementModel.create({
         driverId: driver1._id,
         ownerId: owner._id,
@@ -143,7 +155,7 @@ export class SeedService {
         requestedDebtDeduction: 600,
         actualDebtDeducted: 600,
         netDriverPayout: 1200,
-        closingDebtBalance: 600, // R600 debt carried over to current week!
+        closingDebtBalance: 600,
         notes: 'Driver requested partial debt deduction of R600 instead of full R1200.',
       });
       console.log('Created Previous Week Settlement for Thabo (Carried Over Debt: R600)');
