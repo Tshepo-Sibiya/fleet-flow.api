@@ -121,6 +121,21 @@ export class DriversService {
     };
   }
 
+  async removeDriver(ownerId: string, driverId: string) {
+    const driver = await this.userModel.findOne({ _id: driverId, ownerId, role: UserRole.DRIVER });
+    if (!driver) {
+      throw new NotFoundException('Driver not found in your fleet');
+    }
+
+    // Unassign driver from any linked vehicle
+    await this.vehicleModel.updateMany({ assignedDriverId: driverId }, { $set: { assignedDriverId: null } });
+
+    // Delete driver document
+    await this.userModel.deleteOne({ _id: driverId });
+
+    return { message: 'Driver removed from fleet successfully' };
+  }
+
   async getDriverCurrentDebt(driverId: string): Promise<number> {
     const latestSettlement = await this.settlementModel
       .findOne({ driverId })
